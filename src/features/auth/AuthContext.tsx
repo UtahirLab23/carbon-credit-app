@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState } from 'react';
 import type { User } from '../../types';
+import type { ApiCredentials } from '../../types/api';
 import { mockUsers } from '../../utils/mockData';
+import { clearCredentials, setCredentials } from '../../services/investorApi';
 
 export interface AuthContextType {
   currentUser: User | null;
@@ -10,6 +12,10 @@ export interface AuthContextType {
   inviteUser: (name: string, email: string, role: User['role'], userType: User['userType']) => void;
   removeUser: (id: string) => void;
   can: (action: 'invite' | 'delete_user' | 'view_users') => boolean;
+  /** Currently saved Blackstone QMS API credentials (null = not configured) */
+  apiCredentials: ApiCredentials | null;
+  /** Persist credentials in context and forward them to the service layer */
+  saveApiCredentials: (creds: ApiCredentials | null) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -24,6 +30,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const savedId = localStorage.getItem(SESSION_KEY);
     return savedId ? (mockUsers.find((u) => u.id === savedId) ?? null) : null;
   });
+
+  // API credentials (kept in memory only — never stored in localStorage)
+  const [apiCredentials, setApiCredentialsState] = useState<ApiCredentials | null>(null);
+
+  const saveApiCredentials = (creds: ApiCredentials | null) => {
+    setApiCredentialsState(creds);
+    if (creds) {
+      setCredentials(creds);
+    } else {
+      clearCredentials();
+    }
+  };
 
   const login = (email: string, password: string): boolean => {
     void password; // static app – no real auth
@@ -77,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, users, login, logout, inviteUser, removeUser, can }}>
+    <AuthContext.Provider value={{ currentUser, users, login, logout, inviteUser, removeUser, can, apiCredentials, saveApiCredentials }}>
       {children}
     </AuthContext.Provider>
   );

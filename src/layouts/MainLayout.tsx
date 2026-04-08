@@ -32,10 +32,12 @@ import {
   NavigateNext,
   People,
   Settings,
+  Cable,
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { useColorMode } from '../theme/ThemeContext';
+import ApiCredentialsDialog from '../components/ApiCredentialsDialog';
 
 const DRAWER_WIDTH = 260;
 
@@ -71,10 +73,11 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, apiCredentials } = useAuth();
   const { mode, toggleColorMode } = useColorMode();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<null | HTMLElement>(null);
+  const [apiDialogOpen, setApiDialogOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -293,6 +296,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <MenuItem onClick={() => { setProfileAnchor(null); }} sx={{ gap: 1.5, fontSize: '0.875rem' }}>
             <Settings fontSize="small" /> Settings
           </MenuItem>
+          <MenuItem
+            onClick={() => { setProfileAnchor(null); setApiDialogOpen(true); }}
+            sx={{ gap: 1.5, fontSize: '0.875rem' }}
+          >
+            <Cable fontSize="small" />
+            API Credentials
+            {apiCredentials && (
+              <Chip label="Connected" size="small" color="success" sx={{ ml: 'auto', height: 18, fontSize: '0.65rem' }} />
+            )}
+          </MenuItem>
           <MenuItem onClick={() => { setProfileAnchor(null); handleLogout(); }} sx={{ gap: 1.5, fontSize: '0.875rem', color: 'error.main' }}>
             <Logout fontSize="small" /> Logout
           </MenuItem>
@@ -303,6 +316,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           {children}
         </Box>
       </Box>
+
+      {/* API Credentials Dialog */}
+      <ApiCredentialsDialog open={apiDialogOpen} onClose={() => setApiDialogOpen(false)} />
     </Box>
   );
 };
