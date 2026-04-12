@@ -2,8 +2,8 @@
  * Maps Blackstone QMS ApiWell objects to the internal CreditRecord shape
  * so that live API data can be displayed in the same CreditsTable component.
  */
-import type { ApiWell } from '../types/api';
-import type { CreditRecord } from '../types';
+import type { ApiWell } from '@/types/api';
+import type { CreditRecord } from '@/types';
 
 /**
  * Derive a traffic-light status from the well's measurement_status / status field.

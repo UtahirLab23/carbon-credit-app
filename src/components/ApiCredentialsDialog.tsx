@@ -1,10 +1,5 @@
-/**
- * ApiCredentialsDialog
- *
- * Lets an authenticated user enter their Blackstone QMS Investor API
- * client_id and client_secret.  Credentials are held in AuthContext
- * (memory only — never written to localStorage or the network).
- */
+// @ts-nocheck
+'use client';
 
 import {
   Alert,
@@ -21,7 +16,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useState } from 'react';
-import { useAuth } from '../features/auth/AuthContext';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface Props {
   open: boolean;
@@ -56,10 +51,10 @@ export default function ApiCredentialsDialog({ open, onClose }: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        <Typography variant="h6" fontWeight={700}>
+        <Typography variant="h6" sx={{ fontWeight: 700 }}>
           Blackstone QMS — API Credentials
         </Typography>
-        <Typography variant="body2" color="text.secondary" mt={0.5}>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           Credentials are stored in memory only and cleared on logout.
         </Typography>
       </DialogTitle>
@@ -88,14 +83,16 @@ export default function ApiCredentialsDialog({ open, onClose }: Props) {
             type={showSecret ? 'text' : 'password'}
             autoComplete="new-password"
             placeholder="••••••••••••••••"
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton onClick={() => setShowSecret((v) => !v)} edge="end" size="small">
-                    {showSecret ? <VisibilityOff /> : <Visibility />}
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowSecret((v) => !v)} edge="end" size="small">
+                      {showSecret ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
 

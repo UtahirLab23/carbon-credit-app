@@ -1,4 +1,4 @@
-import type { CreditRecord, User, DashboardStats } from '../types';
+import type { CreditRecord, User, DashboardStats } from '@/types';
 
 export const mockUsers: User[] = [
   {
