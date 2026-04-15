@@ -57,7 +57,8 @@ const navItems: NavItem[] = [
   { label: 'Operations In Progress',  path: '/red',       icon: <FiberManualRecord sx={{ color: '#EF5350' }} />,    color: '#EF5350', dot: '#EF5350' },
   { label: 'Credit Certification',    path: '/yellow',    icon: <FiberManualRecord sx={{ color: '#FFA726' }} />,    color: '#FFA726', dot: '#FFA726' },
   { label: 'Credits Issued',          path: '/green',     icon: <FiberManualRecord sx={{ color: '#66BB6A' }} />,    color: '#66BB6A', dot: '#66BB6A' },
-  { label: 'User Management',         path: '/users',     icon: <People />,                                          color: '#90CAF9', requiredRole: ['Admin', 'Manager'] },
+  { label: 'User Management',         path: '/users',     icon: <People />,    color: '#90CAF9', requiredRole: ['Admin', 'Manager'] },
+  { label: 'Settings',                path: '/settings',  icon: <Settings />,  color: '#B0BEC5' },
 ];
 
 const breadcrumbMap: Record<string, string[]> = {
@@ -66,6 +67,7 @@ const breadcrumbMap: Record<string, string[]> = {
   '/yellow':    ['Dashboard', 'Credit Certification'],
   '/green':     ['Dashboard', 'Credits Issued'],
   '/users':     ['Dashboard', 'User Management'],
+  '/settings':  ['Dashboard', 'Settings'],
 };
 
 interface MainLayoutProps {
