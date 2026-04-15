@@ -9,6 +9,12 @@ const ROLE_REQUIRED: Record<string, Array<'Admin' | 'Manager' | 'Viewer'>> = {
 };
 
 export async function middleware(request: NextRequest) {
+  // Guard: if env vars are missing (e.g. Vercel deployment without env vars set),
+  // skip middleware entirely rather than crashing with MIDDLEWARE_INVOCATION_FAILED.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return NextResponse.next();
+  }
+
   const { pathname } = request.nextUrl;
 
   const isAuthRoute   = pathname.startsWith('/login');
