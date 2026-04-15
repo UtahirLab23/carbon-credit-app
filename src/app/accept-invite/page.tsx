@@ -1,9 +1,5 @@
 'use client';
 
-// This page must not be statically prerendered — it reads URL hash tokens
-// that only exist in the browser at runtime.
-export const dynamic = 'force-dynamic';
-
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -15,7 +11,6 @@ import { createClient } from '@/lib/supabase/client';
 
 function AcceptInviteInner() {
   const router = useRouter();
-  const supabase = createClient();
 
   const [password, setPassword]           = useState('');
   const [confirm, setConfirm]             = useState('');
@@ -30,6 +25,10 @@ function AcceptInviteInner() {
   // Supabase puts the session tokens in the URL hash on redirect from email link.
   // We need to exchange them for a real session first.
   useEffect(() => {
+    // createClient() is called inside useEffect so it only runs in the browser,
+    // never during SSR/static prerendering (which has no env vars available).
+    const supabase = createClient();
+
     const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
     const accessToken  = hashParams.get('access_token');
     const refreshToken = hashParams.get('refresh_token');
@@ -51,7 +50,6 @@ function AcceptInviteInner() {
         }
         setVerifying(false);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,6 +66,7 @@ function AcceptInviteInner() {
     }
 
     setLoading(true);
+    const supabase = createClient();
     const { error: updateError } = await supabase.auth.updateUser({ password });
     setLoading(false);
 
