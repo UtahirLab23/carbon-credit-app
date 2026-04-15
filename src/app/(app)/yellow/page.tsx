@@ -1,16 +1,19 @@
+'use client';
 import CreditsPageClient from '@/components/credits/CreditsPageClient';
-import { mockCreditRecords } from '@/utils/mockData';
+import { useCreditsData } from '@/hooks/useCreditsData';
 
 export default function YellowPage() {
-  const records = mockCreditRecords.filter((r) => r.status === 'yellow');
+  const { yellow, loading, error } = useCreditsData();
   return (
     <CreditsPageClient
-      records={records}
+      records={yellow}
       statusColor="#FFA726"
       statusLabel="Credit Certification"
       title="Yellow Credits"
       subtitle="Wells in the credit certification process"
       iconName="Verified"
+      loading={loading}
+      error={error}
     />
   );
 }

@@ -1,101 +1,26 @@
 /**
- * Blackstone QMS Investor API — Service Layer
+ * Blackstone QMS Investor API — Client Service Layer
  *
- * Handles:
- *  - Bearer token acquisition & in-memory caching (30-min lifetime)
- *  - All read endpoints defined in the API guide
- *
- * ⚠️  In production, token requests should go through YOUR backend proxy so
- *     the client_secret never ships in browser-side JavaScript.
- *     For this demo app the calls are made directly from the browser.
+ * All requests go through our own Next.js API routes (/api/investor/...).
+ * The server routes handle token acquisition using env-var credentials.
+ * The browser sends NO secrets and NO bearer tokens.
  */
 
 import type {
-  ApiCredentials,
   ApiInvestorUpdate,
   ApiProject,
   ApiReport,
   ApiWell,
-  TokenCache,
-  TokenResponse,
 } from '../types/api';
 
-const FUNCTIONS_HOST = 'https://iqdminvbtviipxahwuhb.supabase.co/functions/v1';
-const TOKEN_ENDPOINT = `${FUNCTIONS_HOST}/investor-api-token`;
-const API_BASE = `${FUNCTIONS_HOST}/investor-api`;
+const API_BASE = '/api/investor';
 
-// ─── In-memory token cache (per browser session) ──────────────────────────────
-let _tokenCache: TokenCache | null = null;
-let _credentials: ApiCredentials | null = null;
-
-/** Call this once when the user provides credentials (e.g. settings dialog). */
-export function setCredentials(creds: ApiCredentials): void {
-  _credentials = creds;
-  _tokenCache = null; // invalidate any cached token
-}
-
-export function clearCredentials(): void {
-  _credentials = null;
-  _tokenCache = null;
-}
-
-export function hasCredentials(): boolean {
-  return _credentials !== null;
-}
-
-// ─── Token management ─────────────────────────────────────────────────────────
-
-/** Returns a valid bearer token, requesting a new one if expired or missing. */
-async function getBearerToken(): Promise<string> {
-  if (!_credentials) {
-    throw new Error('API credentials not configured. Call setCredentials() first.');
-  }
-
-  // Return cached token if still valid (with 60s buffer before expiry)
-  if (_tokenCache && Date.now() < _tokenCache.expiresAt - 60_000) {
-    return _tokenCache.accessToken;
-  }
-
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: _credentials.clientId,
-    client_secret: _credentials.clientSecret,
-  });
-
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`Token request failed (${res.status}): ${text}`);
-  }
-
-  const data: TokenResponse = await res.json();
-  if (!data.success || !data.access_token) {
-    throw new Error('Invalid token response from server.');
-  }
-
-  _tokenCache = {
-    accessToken: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  };
-
-  return _tokenCache.accessToken;
-}
-
-// ─── Generic authenticated GET ────────────────────────────────────────────────
+// ─── Generic GET helper ───────────────────────────────────────────────────────
 
 async function apiGet<T>(path: string): Promise<T> {
-  const token = await getBearerToken();
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
   });
 
   if (!res.ok) {
@@ -103,7 +28,9 @@ async function apiGet<T>(path: string): Promise<T> {
     throw new Error(`API error (${res.status}): ${text}`);
   }
 
-  return res.json() as Promise<T>;
+  const json = await res.json();
+  // Blackstone wraps all responses in { success: true, data: ... }
+  return (json?.data ?? json) as T;
 }
 
 // ─── Public API methods ───────────────────────────────────────────────────────

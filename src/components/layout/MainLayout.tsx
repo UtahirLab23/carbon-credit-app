@@ -17,6 +17,7 @@ import {
   ListItemText,
   Menu,
   MenuItem,
+  Skeleton,
   Stack,
   Toolbar,
   Tooltip,
@@ -34,13 +35,11 @@ import {
   NavigateNext,
   People,
   Settings,
-  Cable,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
 import NextLink from 'next/link';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useColorMode } from '@/components/providers/MuiThemeProvider';
-import ApiCredentialsDialog from '@/components/ApiCredentialsDialog';
 
 const DRAWER_WIDTH = 260;
 
@@ -76,11 +75,10 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout, apiCredentials } = useAuth();
+  const { currentUser, logout } = useAuth();
   const { mode, toggleColorMode } = useColorMode();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<null | HTMLElement>(null);
-  const [apiDialogOpen, setApiDialogOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -161,11 +159,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <Box sx={{ p: 2 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.dark', fontSize: '0.85rem', fontWeight: 700 }}>
-            {currentUser?.name?.charAt(0)}
+            {currentUser?.name?.charAt(0) ?? ''}
           </Avatar>
-          <Box flex={1} minWidth={0}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{currentUser?.name}</Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>{currentUser?.role}</Typography>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            {currentUser ? (
+              <>
+                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{currentUser.name}</Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>{currentUser.role}</Typography>
+              </>
+            ) : (
+              <>
+                <Skeleton variant="text" width={100} height={16} />
+                <Skeleton variant="text" width={60} height={13} />
+              </>
+            )}
           </Box>
           <Tooltip title="Logout">
             <IconButton size="small" onClick={handleLogout} sx={{ color: 'text.secondary' }}>
@@ -258,23 +265,27 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 </IconButton>
               </Tooltip>
 
-              <Chip
-                label={currentUser?.role}
-                size="small"
-                sx={{
-                  display: { xs: 'none', sm: 'flex' },
-                  bgcolor: 'rgba(76,175,80,0.12)',
-                  color: 'primary.main',
-                  fontWeight: 700,
-                  fontSize: '0.7rem',
-                  border: '1px solid rgba(76,175,80,0.25)',
-                }}
-              />
+              {currentUser ? (
+                <Chip
+                  label={currentUser.role}
+                  size="small"
+                  sx={{
+                    display: { xs: 'none', sm: 'flex' },
+                    bgcolor: 'rgba(76,175,80,0.12)',
+                    color: 'primary.main',
+                    fontWeight: 700,
+                    fontSize: '0.7rem',
+                    border: '1px solid rgba(76,175,80,0.25)',
+                  }}
+                />
+              ) : (
+                <Skeleton variant="rounded" width={52} height={22} sx={{ display: { xs: 'none', sm: 'block' } }} />
+              )}
 
               <Tooltip title="Account">
                 <IconButton onClick={(e) => setProfileAnchor(e.currentTarget)} size="small" sx={{ ml: 0.5 }}>
                   <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.dark', fontSize: '0.8rem', fontWeight: 700 }}>
-                    {currentUser?.name?.charAt(0)}
+                    {currentUser?.name?.charAt(0) ?? ''}
                   </Avatar>
                 </IconButton>
               </Tooltip>
@@ -292,22 +303,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           slotProps={{ paper: { sx: { mt: 1, minWidth: 200 } } }}
         >
           <Box sx={{ px: 2, py: 1.5 }}>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>{currentUser?.name}</Typography>
-            <Typography variant="caption" color="text.secondary">{currentUser?.email}</Typography>
+            {currentUser ? (
+              <>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>{currentUser.name}</Typography>
+                <Typography variant="caption" color="text.secondary">{currentUser.email}</Typography>
+              </>
+            ) : (
+              <>
+                <Skeleton variant="text" width={120} height={18} />
+                <Skeleton variant="text" width={160} height={14} />
+              </>
+            )}
           </Box>
           <Divider />
           <MenuItem onClick={() => { setProfileAnchor(null); }} sx={{ gap: 1.5, fontSize: '0.875rem' }}>
             <Settings fontSize="small" /> Settings
-          </MenuItem>
-          <MenuItem
-            onClick={() => { setProfileAnchor(null); setApiDialogOpen(true); }}
-            sx={{ gap: 1.5, fontSize: '0.875rem' }}
-          >
-            <Cable fontSize="small" />
-            API Credentials
-            {apiCredentials && (
-              <Chip label="Connected" size="small" color="success" sx={{ ml: 'auto', height: 18, fontSize: '0.65rem' }} />
-            )}
           </MenuItem>
           <MenuItem onClick={() => { setProfileAnchor(null); handleLogout(); }} sx={{ gap: 1.5, fontSize: '0.875rem', color: 'error.main' }}>
             <Logout fontSize="small" /> Logout
@@ -319,9 +329,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           {children}
         </Box>
       </Box>
-
-      {/* API Credentials Dialog */}
-      <ApiCredentialsDialog open={apiDialogOpen} onClose={() => setApiDialogOpen(false)} />
     </Box>
   );
 };

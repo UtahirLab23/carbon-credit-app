@@ -1,7 +1,7 @@
 /**
  * React hooks for the Blackstone QMS Investor API.
  * Each hook returns { data, loading, error, refetch }.
- * They automatically skip the fetch when no credentials are configured.
+ * Fetching starts immediately on mount — credentials are handled server-side.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -10,7 +10,6 @@ import {
   fetchProjects,
   fetchReports,
   fetchWells,
-  hasCredentials,
 } from '@/services/investorApi';
 import type { ApiInvestorUpdate, ApiProject, ApiReport, ApiWell } from '@/types/api';
 
@@ -23,11 +22,10 @@ interface AsyncState<T> {
 
 function useApiCall<T>(fetcher: () => Promise<T>, deps: unknown[] = []): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const run = useCallback(() => {
-    if (!hasCredentials()) return;
     setLoading(true);
     setError(null);
     void (async () => {

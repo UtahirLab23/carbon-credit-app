@@ -1,11 +1,13 @@
 // @ts-nocheck
 'use client';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
   Card,
   CardContent,
   Grid,
+  Snackbar,
   Typography,
   Stack,
   Divider,
@@ -20,10 +22,10 @@ import {
   RadioButtonChecked,
   TrendingUp,
 } from '@mui/icons-material';
-import { mockDashboardStats, mockCreditRecords } from '@/utils/mockData';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { useProjects, useWells, useLatestUpdate } from '@/components/hooks/useInvestorApi';
-import { wellToRecord } from '@/utils/apiMappers';
+import { useCreditsData } from '@/hooks/useCreditsData';
+import { StatCardSkeleton, TableSkeleton } from '@/components/Skeletons';
 
 const fmt = (n: number) =>
   n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M`
@@ -41,71 +43,108 @@ const CARD_META = [
 ];
 
 const DashboardClient: React.FC = () => {
-  const { currentUser, apiCredentials } = useAuth();
+  const { currentUser } = useAuth();
+  const { all, red, yellow, green, loading, error, stats } = useCreditsData();
+  const searchParams = useSearchParams();
+  const [forbiddenSnack, setForbiddenSnack] = useState(false);
 
-  const { data: projects } = useProjects();
-  const firstProjectId = projects?.[0]?.id ?? null;
-  const { data: wells, loading: wellsLoading } = useWells(firstProjectId);
-  const { data: latestUpdate } = useLatestUpdate(firstProjectId);
+  // Show a toast if middleware redirected here due to insufficient permissions
+  // eslint-disable-next-line react-compiler/react-compiler
+  useEffect(() => {
+    if (searchParams.get('forbidden')) {
+      setForbiddenSnack(true);
+      // Clean the URL without a full reload
+      const url = new URL(window.location.href);
+      url.searchParams.delete('forbidden');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams]);
 
-  const isLive = Boolean(apiCredentials && wells);
-  const liveRecords = wells ? wells.map(wellToRecord) : null;
-
-  const activeWells   = isLive ? (wells?.length ?? 0) : mockDashboardStats.activeWells;
-  const totalCredits  = isLive
-    ? (latestUpdate?.aggregate_totals?.total_credits ?? liveRecords!.reduce((s, r) => s + r.credits, 0))
-    : mockDashboardStats.totalCredits;
-  const mktValue      = isLive
-    ? (latestUpdate?.aggregate_totals?.total_est_dollar_value ?? liveRecords!.reduce((s, r) => s + r.marketValue, 0))
-    : mockDashboardStats.projectedMktValue;
-  const projected = mktValue * 1.15;
+  const projected = stats.totalMarketValue * 1.15;
 
   const statCards = [
-    { ...CARD_META[0], value: activeWells.toString(),   change: isLive ? 'Live well count'        : '+3 this month' },
-    { ...CARD_META[1], value: fmt(totalCredits),        change: isLive ? 'Live total credits'     : '+12.4% YoY' },
-    { ...CARD_META[2], value: fmtUSD(mktValue),         change: isLive ? 'Live market value'      : '+8.2% this quarter' },
-    { ...CARD_META[3], value: fmtUSD(projected),        change: isLive ? '+15% of live mkt value' : '+15% projected growth' },
+    { ...CARD_META[0], value: stats.activeWells.toString(),   change: 'Live well count' },
+    { ...CARD_META[1], value: fmt(stats.totalCredits),        change: 'Live total credits' },
+    { ...CARD_META[2], value: fmtUSD(stats.totalMarketValue), change: 'Live market value' },
+    { ...CARD_META[3], value: fmtUSD(projected),              change: '+15% of live market value' },
   ];
 
-  const records = liveRecords ?? mockCreditRecords;
-  const redCredits    = records.filter((r) => r.status === 'red').reduce((s, r) => s + r.credits, 0);
-  const yellowCredits = records.filter((r) => r.status === 'yellow').reduce((s, r) => s + r.credits, 0);
-  const greenCredits  = records.filter((r) => r.status === 'green').reduce((s, r) => s + r.credits, 0);
-  const redCount      = isLive ? records.filter((r) => r.status === 'red').length    : mockDashboardStats.redCount;
-  const yellowCount   = isLive ? records.filter((r) => r.status === 'yellow').length : mockDashboardStats.yellowCount;
-  const greenCount    = isLive ? records.filter((r) => r.status === 'green').length  : mockDashboardStats.greenCount;
+  const redCredits    = red.reduce((s, r) => s + r.credits, 0);
+  const yellowCredits = yellow.reduce((s, r) => s + r.credits, 0);
+  const greenCredits  = green.reduce((s, r) => s + r.credits, 0);
+  const totalCredits  = redCredits + yellowCredits + greenCredits;
 
   const pipelineStages = [
-    { label: 'Operations In Progress', color: '#EF5350', count: redCount,    credits: redCredits,    description: 'Credits associated with field operations currently in progress.' },
-    { label: 'Credit Certification',   color: '#FFA726', count: yellowCount, credits: yellowCredits, description: 'Credits undergoing certification, registry processing, or tokenization.' },
-    { label: 'Credits Issued',         color: '#66BB6A', count: greenCount,  credits: greenCredits,  description: 'Credits fully issued, tokenized, and held in the High Intensity Vault.' },
+    { label: 'Operations In Progress', color: '#EF5350', count: stats.redCount,    credits: redCredits,    description: 'Credits associated with field operations currently in progress.' },
+    { label: 'Credit Certification',   color: '#FFA726', count: stats.yellowCount, credits: yellowCredits, description: 'Credits undergoing certification, registry processing, or tokenization.' },
+    { label: 'Credits Issued',         color: '#66BB6A', count: stats.greenCount,  credits: greenCredits,  description: 'Credits fully issued, tokenized, and held in the High Intensity Vault.' },
   ];
 
-  const recentActivity = records.slice(0, 6);
+  const recentActivity = all.slice(0, 6);
+
+  // ─── Full-page skeleton while fetching ──────────────────────────────────────
+  if (loading) {
+    return (
+      <Box>
+        <Box mb={4}>
+          <Box sx={{ height: 36, width: 260, bgcolor: 'action.hover', borderRadius: 1, mb: 1 }} />
+          <Box sx={{ height: 20, width: 320, bgcolor: 'action.hover', borderRadius: 1 }} />
+        </Box>
+        <StatCardSkeleton />
+        <TableSkeleton rows={6} />
+      </Box>
+    );
+  }
+
+  // ─── Error state ─────────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <Box>
+        <Box mb={4}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>Dashboard</Typography>
+        </Box>
+        <Box sx={{ p: 4, borderRadius: 2, bgcolor: 'rgba(239,83,80,0.08)', border: '1px solid rgba(239,83,80,0.3)', textAlign: 'center' }}>
+          <Typography variant="h6" color="error" sx={{ mb: 1 }}>Unable to load data</Typography>
+          <Typography variant="body2" color="text.secondary">{error}</Typography>
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <Box>
+      {/* Access-denied toast — shown when middleware redirected from a restricted page */}
+      <Snackbar
+        open={forbiddenSnack}
+        autoHideDuration={5000}
+        onClose={() => setForbiddenSnack(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert severity="error" onClose={() => setForbiddenSnack(false)} sx={{ width: '100%' }}>
+          You don&apos;t have permission to access that page.
+        </Alert>
+      </Snackbar>
+
       {/* Header */}
       <Box mb={4}>
-        <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ alignItems: 'center' }}>
-          <Box flex={1}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <Box sx={{ flex: 1 }}>
             <Typography variant="h4" sx={{ fontWeight: 700 }} color="text.primary">Dashboard</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               Welcome back, {currentUser?.name?.split(' ')[0]}. Here&apos;s your carbon credit overview.
             </Typography>
           </Box>
           <Chip
-            label={isLive ? '● Live Data' : '○ Demo Data'}
+            label="● Live Data"
             size="small"
             sx={{
-              bgcolor: isLive ? 'rgba(37,196,106,0.15)' : 'rgba(255,255,255,0.07)',
-              color: isLive ? '#25C46A' : 'text.secondary',
+              bgcolor: 'rgba(37,196,106,0.15)',
+              color: '#25C46A',
               fontWeight: 700,
               fontSize: '0.72rem',
-              border: `1px solid ${isLive ? 'rgba(37,196,106,0.35)' : 'rgba(255,255,255,0.12)'}`,
+              border: '1px solid rgba(37,196,106,0.35)',
             }}
           />
-          {wellsLoading && <Typography variant="caption" color="text.secondary">Loading live data…</Typography>}
         </Stack>
       </Box>
 

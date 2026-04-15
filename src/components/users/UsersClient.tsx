@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   Avatar,
@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,6 +23,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Skeleton,
   Snackbar,
   Stack,
   Table,
@@ -37,11 +39,13 @@ import {
 import {
   AdminPanelSettings,
   Close,
+  ContentCopy,
   DeleteOutlined,
   Email,
   ManageAccounts,
   People,
   PersonAdd,
+  Refresh,
   Search,
   VisibilityOutlined,
 } from '@mui/icons-material';
@@ -49,13 +53,14 @@ import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { listUsers, inviteUser as inviteUserAction, deleteUser as deleteUserAction, resendInvite } from '@/app/(app)/users/actions';
 import type { User } from '@/types';
 
 const inviteSchema = z.object({
   name:     z.string().min(2, 'Name must be at least 2 characters'),
   email:    z.string().email('Invalid email address'),
   role:     z.enum(['Admin', 'Manager', 'Viewer']),
-  userType: z.enum(['Default User', 'Future User Lvl 1', 'Future User Lvl 2']),
+  userType: z.literal('Default User'),
 });
 type InviteForm = z.infer<typeof inviteSchema>;
 
@@ -68,12 +73,36 @@ const roleIcons: Record<User['role'], React.ReactNode> = {
 };
 
 const UsersClient: React.FC = () => {
-  const { users, inviteUser, removeUser, can, currentUser } = useAuth();
+  const { can, currentUser } = useAuth();
+
+  // ── Real users loaded from Supabase Auth admin API ──────────────────────────
+  const [users,        setUsers]        = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadError,    setLoadError]    = useState<string | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    setLoadError(null);
+    const result = await listUsers();
+    setLoadingUsers(false);
+    if (!result.success || !result.users) {
+      setLoadError(result.error ?? 'Failed to load users');
+      return;
+    }
+    setUsers(result.users);
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void fetchUsers(); }, []);
+  // ────────────────────────────────────────────────────────────────────────────
+
   const [search,       setSearch]       = useState('');
   const [inviteOpen,   setInviteOpen]   = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [snack,        setSnack]        = useState('');
+  const [snackSeverity, setSnackSeverity] = useState<'success'|'error'>('success');
   const [submitting,   setSubmitting]   = useState(false);
+  const [inviteLink,   setInviteLink]   = useState<string | null>(null);
 
   const { control, handleSubmit, reset, formState: { errors }, setError } =
     useForm<InviteForm>({
@@ -89,23 +118,58 @@ const UsersClient: React.FC = () => {
   );
 
   const onSubmit = async (data: InviteForm) => {
-    if (users.some((u) => u.email.toLowerCase() === data.email.toLowerCase())) {
-      setError('email', { message: 'A user with this email already exists' });
+    setSubmitting(true);
+    const result = await inviteUserAction(data);
+    setSubmitting(false);
+
+    if (!result.success) {
+      if (result.error?.toLowerCase().includes('email')) {
+        setError('email', { message: result.error });
+      } else {
+        setSnackSeverity('error');
+        setSnack(result.error ?? 'Failed to send invitation');
+      }
       return;
     }
-    setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 800));
-    inviteUser(data.name, data.email, data.role, data.userType);
-    setSubmitting(false);
+
     setInviteOpen(false);
     reset();
-    setSnack(`Invitation sent to ${data.email}`);
+    // Refresh the real user list so the newly invited user appears
+    await fetchUsers();
+
+    if (result.inviteLink) {
+      setInviteLink(result.inviteLink);
+    } else {
+      setSnackSeverity('success');
+      setSnack(`Invitation email sent to ${data.email}`);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    removeUser(id);
+  const handleDelete = async (id: string) => {
+    const result = await deleteUserAction(id);
     setDeleteTarget(null);
-    setSnack('User removed successfully');
+    if (!result.success) {
+      setSnackSeverity('error');
+      setSnack(result.error ?? 'Failed to remove user');
+    } else {
+      // Remove from local state immediately (optimistic), then re-fetch to confirm
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      setSnackSeverity('success');
+      setSnack('User removed successfully');
+      // Re-fetch in background to stay in sync
+      fetchUsers();
+    }
+  };
+
+  const handleResend = async (email: string) => {
+    const result = await resendInvite(email);
+    if (!result.success) {
+      setSnackSeverity('error');
+      setSnack(result.error ?? 'Failed to resend invite');
+    } else {
+      setSnackSeverity('success');
+      setSnack(`Invite resent to ${email}`);
+    }
   };
 
   const statsCards = [
@@ -125,33 +189,45 @@ const UsersClient: React.FC = () => {
             Manage platform access, roles, and invite new team members.
           </Typography>
         </Box>
-        {can('invite') && (
-          <Button variant="contained" startIcon={<PersonAdd />} onClick={() => setInviteOpen(true)}
-            sx={{ background: 'linear-gradient(135deg, #4CAF50, #2E7D32)', boxShadow: '0 4px 16px rgba(76,175,80,0.3)', whiteSpace: 'nowrap' }}>
-            Invite User
-          </Button>
-        )}
+        <Stack direction="row" spacing={1}>
+          <Tooltip title="Refresh users">
+            <IconButton onClick={fetchUsers} disabled={loadingUsers} size="small"
+              sx={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}>
+              {loadingUsers ? <CircularProgress size={16} /> : <Refresh fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          {can('invite') && (
+            <Button variant="contained" startIcon={<PersonAdd />} onClick={() => setInviteOpen(true)}
+              sx={{ background: 'linear-gradient(135deg, #4CAF50, #2E7D32)', boxShadow: '0 4px 16px rgba(76,175,80,0.3)', whiteSpace: 'nowrap' }}>
+              Invite User
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
-      {/* Stats — 24px gap, uniform card padding from theme */}
+      {/* Load error banner */}
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 3 }} action={
+          <Button color="inherit" size="small" onClick={fetchUsers}>Retry</Button>
+        }>{loadError}</Alert>
+      )}
+
+      {/* Stats */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         {statsCards.map((s) => (
           <Grid size={{ xs: 12, sm: 6, lg: 3 }} key={s.label}>
             <Card sx={{ bgcolor: 'background.paper', height: '100%' }}>
-              {/* CardContent padding from theme (24px) */}
               <CardContent>
                 <Typography variant="caption" color="text.secondary" sx={{
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  lineHeight: 1.4,
-                  display: 'block',
+                  fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                  lineHeight: 1.4, display: 'block',
                 }}>
                   {s.label}
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: s.color, mt: 1, lineHeight: 1.15 }}>
-                  {s.value}
-                </Typography>
+                {loadingUsers
+                  ? <Skeleton variant="text" width={40} height={48} sx={{ mt: 1 }} />
+                  : <Typography variant="h4" sx={{ fontWeight: 700, color: s.color, mt: 1, lineHeight: 1.15 }}>{s.value}</Typography>
+                }
               </CardContent>
             </Card>
           </Grid>
@@ -186,7 +262,19 @@ const UsersClient: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.length === 0 ? (
+                {loadingUsers ? (
+                  // Skeleton rows while fetching real users
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}><Skeleton variant="circular" width={36} height={36} /><Box><Skeleton width={120} height={14} /><Skeleton width={160} height={12} sx={{ mt: 0.5 }} /></Box></Stack></TableCell>
+                      <TableCell><Skeleton width={100} height={14} /></TableCell>
+                      <TableCell><Skeleton variant="rounded" width={70} height={24} /></TableCell>
+                      <TableCell><Skeleton width={60} height={14} /></TableCell>
+                      <TableCell><Skeleton width={80} height={14} /></TableCell>
+                      <TableCell align="right"><Skeleton variant="circular" width={28} height={28} sx={{ ml: 'auto' }} /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 6, border: 0 }}>
                       <Typography color="text.secondary">No users found</Typography>
@@ -233,7 +321,8 @@ const UsersClient: React.FC = () => {
                       <TableCell align="right">
                         <Tooltip title="Resend invite">
                           <span>
-                            <IconButton size="small" sx={{ color: 'text.secondary', mr: 0.5 }} disabled={user.status !== 'Pending'}>
+                            <IconButton size="small" sx={{ color: 'text.secondary', mr: 0.5 }} disabled={user.status !== 'Pending'}
+                              onClick={() => handleResend(user.email)}>
                               <Email fontSize="small" />
                             </IconButton>
                           </span>
@@ -298,15 +387,15 @@ const UsersClient: React.FC = () => {
                 </FormControl>
               )} />
               <Controller name="userType" control={control} render={({ field }) => (
-                <FormControl fullWidth error={!!errors.userType}>
-                  <InputLabel>User Type</InputLabel>
-                  <Select {...field} label="User Type">
-                    <MenuItem value="Default User">Default User</MenuItem>
-                    <MenuItem value="Future User Lvl 1">Future User Lvl 1</MenuItem>
-                    <MenuItem value="Future User Lvl 2">Future User Lvl 2</MenuItem>
-                  </Select>
-                  {errors.userType && <FormHelperText>{errors.userType.message}</FormHelperText>}
-                </FormControl>
+                <TextField
+                  {...field}
+                  label="User Type"
+                  fullWidth
+                  disabled
+                  value="Default User"
+                  helperText="All new users are assigned Default User type"
+                  slotProps={{ input: { readOnly: true } }}
+                />
               )} />
             </Stack>
           </DialogContent>
@@ -336,10 +425,36 @@ const UsersClient: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Copy invite link dialog — shown in local dev when Supabase email is not configured */}
+      <Dialog open={!!inviteLink} onClose={() => setInviteLink(null)} maxWidth="sm" fullWidth
+        slotProps={{ paper: { sx: { bgcolor: 'background.paper', border: '1px solid rgba(76,175,80,0.2)' } } }}>
+        <DialogTitle>
+          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>Share Invite Link</Typography>
+            <IconButton size="small" onClick={() => setInviteLink(null)}><Close /></IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Email delivery is not configured. Copy this link and send it directly to the user.
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            <TextField
+              fullWidth size="small" value={inviteLink ?? ''} slotProps={{ input: { readOnly: true } }}
+              sx={{ '& input': { fontSize: '0.78rem', fontFamily: 'monospace' } }}
+            />
+            <Button variant="outlined" startIcon={<ContentCopy />}
+              onClick={() => { navigator.clipboard.writeText(inviteLink ?? ''); setSnack('Link copied!'); setInviteLink(null); }}>
+              Copy
+            </Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
       <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack('')}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-        <Alert onClose={() => setSnack('')} severity="success"
-          sx={{ bgcolor: '#1B5E20', color: '#fff', '& .MuiAlert-icon': { color: '#66BB6A' } }}>
+        <Alert onClose={() => setSnack('')} severity={snackSeverity}
+          sx={{ bgcolor: snackSeverity === 'success' ? '#1B5E20' : '#7f1d1d', color: '#fff', '& .MuiAlert-icon': { color: snackSeverity === 'success' ? '#66BB6A' : '#EF5350' } }}>
           {snack}
         </Alert>
       </Snackbar>

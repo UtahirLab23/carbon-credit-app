@@ -2,10 +2,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { User } from '@/types';
-import type { ApiCredentials } from '@/types/api';
 import { mockUsers } from '@/utils/mockData';
-import { setCredentials, clearCredentials } from '@/services/investorApi';
 import { createClient } from '@/lib/supabase/client';
 
 export interface AuthContextType {
@@ -15,64 +14,85 @@ export interface AuthContextType {
   inviteUser: (name: string, email: string, role: User['role'], userType: User['userType']) => void;
   removeUser: (id: string) => void;
   can: (action: 'invite' | 'delete_user' | 'view_users') => boolean;
-  apiCredentials: ApiCredentials | null;
-  saveApiCredentials: (creds: ApiCredentials | null) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
+/** Build our internal User shape from a Supabase auth user object.
+ *  Priority: user_metadata fields → mockUsers email match → safe defaults.
+ */
+function buildUser(supaUser: SupabaseUser): User {
+  // Prefer metadata set at invite / seed time
+  const meta = supaUser.user_metadata ?? {};
+
+  // Fall back to mockUsers for legacy seeded accounts that have metadata
+  const matched = mockUsers.find(
+    (u) => u.email.toLowerCase() === (supaUser.email ?? '').toLowerCase()
+  );
+
+  return {
+    id:         supaUser.id,
+    email:      supaUser.email ?? '',
+    name:       meta.name ?? meta.full_name ?? matched?.name ?? supaUser.email ?? 'User',
+    role:       meta.role       ?? matched?.role       ?? 'Viewer',
+    userType:   meta.userType   ?? matched?.userType   ?? 'Default User',
+    status:     meta.status     ?? matched?.status     ?? 'Active',
+    joinedDate: matched?.joinedDate ?? new Date().toISOString().split('T')[0],
+  };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<User[]>(mockUsers);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [apiCredentials, setApiCredentialsState] = useState<ApiCredentials | null>(null);
 
-  // Sync currentUser from Supabase session on mount
   useEffect(() => {
     const supabase = createClient();
 
-    const syncUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Match by email to find the mock user record (or create a default Admin)
-        const matched = mockUsers.find(
-          (u) => u.email.toLowerCase() === (user.email ?? '').toLowerCase()
-        );
-        setCurrentUser(matched ?? {
-          id: user.id,
-          name: user.user_metadata?.full_name ?? user.email ?? 'User',
-          email: user.email ?? '',
-          role: 'Admin',
-          userType: 'Default User',
-          status: 'Active',
-          joinedDate: new Date().toISOString().split('T')[0],
-        });
-      } else {
-        setCurrentUser(null);
+    // onAuthStateChange fires immediately with INITIAL_SESSION on mount,
+    // passing the current session directly — no separate getSession() call needed.
+    // This is the single source of truth and avoids any race condition.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setCurrentUser(session?.user ? buildUser(session.user) : null);
       }
-    };
+    );
 
-    syncUser();
+    // ── "Remember Me = off" enforcement ──────────────────────────────────────
+    // How it works (two-key system):
+    //
+    //   localStorage  'ccx_remember' = '0'  → user chose "don't remember"
+    //   sessionStorage 'ccx_session_alive' = '1' → tab/browser is still open
+    //
+    // When the browser CLOSES, sessionStorage is wiped automatically by the browser.
+    // On next browser OPEN, sessionStorage is empty but localStorage still has '0'.
+    // We detect this combination and sign the user out.
+    //
+    // During a normal page REFRESH, sessionStorage survives → no sign-out.
+    (async () => {
+      const rememberChoice  = localStorage.getItem('ccx_remember');    // '0' or '1' or null
+      const sessionAlive    = sessionStorage.getItem('ccx_session_alive'); // '1' or null
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      syncUser();
-    });
+      if (rememberChoice === '0' && !sessionAlive) {
+        // Browser was closed and reopened — enforce session-only
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          await supabase.auth.signOut();
+          localStorage.removeItem('ccx_remember');
+          window.location.href = '/login';
+        }
+      }
+    })();
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const saveApiCredentials = (creds: ApiCredentials | null) => {
-    setApiCredentialsState(creds);
-    if (creds) {
-      setCredentials(creds);
-    } else {
-      clearCredentials();
-    }
-  };
-
   const logout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    setCurrentUser(null);
+    // Clear remember-me markers so the next login prompts fresh
+    localStorage.removeItem('ccx_remember');
+    sessionStorage.removeItem('ccx_session_alive');
+    // signOut triggers onAuthStateChange → SIGNED_OUT → setCurrentUser(null)
     window.location.href = '/login';
   };
 
@@ -102,9 +122,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const role = currentUser?.role;
     if (!role) return false;
     const rules: Record<typeof action, User['role'][]> = {
-      invite: ['Admin', 'Manager'],
+      invite:      ['Admin', 'Manager'],
       delete_user: ['Admin'],
-      view_users: ['Admin', 'Manager'],
+      view_users:  ['Admin', 'Manager'],
     };
     return rules[action].includes(role);
   };
@@ -117,8 +137,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       inviteUser,
       removeUser,
       can,
-      apiCredentials,
-      saveApiCredentials,
     }}>
       {children}
     </AuthContext.Provider>
@@ -130,3 +148,4 @@ export const useAuth = (): AuthContextType => {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 };
+

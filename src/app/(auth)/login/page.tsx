@@ -19,8 +19,11 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff, EnergySavingsLeaf } from '@mui/icons-material';
 import { signIn } from './actions';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email,        setEmail]        = useState('');
   const [password,     setPassword]     = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -40,11 +43,42 @@ export default function LoginPage() {
     formData.set('email', email);
     formData.set('password', password);
     const result = await signIn(formData);
-    setLoading(false);
     if (result?.error) {
       setError(result.error);
+      setLoading(false);
+      return;
     }
-    void remember; // future: persist session
+
+    // Immediately hydrate the browser-side Supabase client with the session
+    // tokens returned from the server action. This triggers onAuthStateChange
+    // with SIGNED_IN RIGHT NOW — so by the time router.push() renders the
+    // dashboard, AuthProvider already has the user's name and role.
+    if (result.accessToken && result.refreshToken) {
+      const supabase = createClient();
+      await supabase.auth.setSession({
+        access_token:  result.accessToken,
+        refresh_token: result.refreshToken,
+      });
+    }
+
+    // Remember Me logic:
+    // Supabase always stores the refresh token in a long-lived cookie.
+    // When "Remember me" is UNCHECKED we mark the session as session-only
+    // using sessionStorage. AuthProvider checks this on every page load —
+    // if the cookie exists but the sessionStorage marker is gone (i.e. new
+    // browser window / browser was restarted), it signs the user out.
+    if (remember) {
+      // Persist across browser restarts.
+      localStorage.setItem('ccx_remember', '1');
+      sessionStorage.setItem('ccx_session_alive', '1');
+    } else {
+      // Session-only: browser close will wipe sessionStorage automatically.
+      // AuthProvider sees ccx_remember='0' + no ccx_session_alive → signs out.
+      localStorage.setItem('ccx_remember', '0');
+      sessionStorage.setItem('ccx_session_alive', '1');
+    }
+
+    router.push('/dashboard');
   };
 
   return (

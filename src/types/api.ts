@@ -30,17 +30,28 @@ export interface ApiProject {
 }
 
 export interface ApiWell {
+  id: string;
   well_name: string;
   api_number: string | null;
+  /** Real status values: "sampling" | "ready_to_cap" | "data_complete" */
   status: string;
+  sort_order: number;
   data_points: number;
   avg_kg_hr: number;
-  measurement_status: string;
-  measurement_window_display: string;
-  sample_start_time: string | null;
-  sample_end_time: string | null;
   credit_count: number;
   est_dollar_value: number | null; // null when financial fields are masked
+  measurement_status: string;
+  measurement_window_display: string | null;
+  currently_monitoring: boolean;
+  sample_start_time: string | null;
+  sample_end_time: string | null;
+  last_qualifying_reading_at: string | null;
+  county: string | null;
+  state: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiReport {
@@ -53,13 +64,17 @@ export interface ApiReport {
 
 export interface ApiInvestorUpdate {
   id: string;
+  project_id: string;
+  report_id: string | null;
+  note: string | null;
+  well_count: number;
+  total_kg_hr: number;
+  /** Total credits across all wells in this update */
+  total_credits: number;
+  /** Total estimated dollar value across all wells */
+  total_value: number | null;
   published_at: string;
-  title?: string;
   report?: ApiReport;
-  aggregate_totals?: {
-    total_credits: number;
-    total_est_dollar_value: number | null;
-  };
 }
 
 // ─── Internal token cache ─────────────────────────────────────────────────────

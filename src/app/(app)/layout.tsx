@@ -1,12 +1,7 @@
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect('/login');
-
+// Auth guard is handled by proxy.ts (middleware) — no need to re-check here.
+// The proxy already redirects unauthenticated users to /login before this runs.
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return <MainLayout>{children}</MainLayout>;
 }

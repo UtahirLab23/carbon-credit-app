@@ -53,6 +53,7 @@ interface CreditsTableProps {
   subtitle: string;
   icon: React.ReactNode;
   loading?: boolean;
+  error?: string | null;
 }
 
 type SortKey = 'name' | 'credits' | 'progress' | 'marketValue';
@@ -72,6 +73,7 @@ const CreditsTable: React.FC<CreditsTableProps> = ({
   subtitle,
   icon,
   loading = false,
+  error = null,
 }) => {
   const [search,    setSearch]    = useState('');
   const [sortKey,   setSortKey]   = useState<SortKey>('credits');
@@ -154,6 +156,12 @@ const CreditsTable: React.FC<CreditsTableProps> = ({
 
   return (
     <Box>
+      {/* API error banner — shown above content so table still displays with mock data */}
+      {error && (
+        <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(255,167,38,0.1)', border: '1px solid rgba(255,167,38,0.3)' }}>
+          <strong>API unavailable:</strong> {error}. Showing demo data.
+        </Alert>
+      )}
       {/* Page header */}
       <Box mb={4}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
