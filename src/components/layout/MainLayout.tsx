@@ -79,6 +79,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { mode, toggleColorMode } = useColorMode();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<null | HTMLElement>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Client-side auth guard — redirect to /login if no session.
+  // We wait up to 2s for AuthProvider to resolve the session before redirecting,
+  // to avoid a flash redirect on first load.
+  React.useEffect(() => {
+    const timer = setTimeout(() => setAuthChecked(true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  React.useEffect(() => {
+    if (authChecked && !currentUser) {
+      router.replace('/login');
+    }
+  }, [authChecked, currentUser, router]);
 
   const handleLogout = () => {
     logout();
