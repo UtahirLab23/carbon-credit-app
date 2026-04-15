@@ -39,7 +39,6 @@ import {
 import {
   AdminPanelSettings,
   Close,
-  ContentCopy,
   DeleteOutlined,
   Email,
   ManageAccounts,
@@ -102,7 +101,6 @@ const UsersClient: React.FC = () => {
   const [snack,        setSnack]        = useState('');
   const [snackSeverity, setSnackSeverity] = useState<'success'|'error'>('success');
   const [submitting,   setSubmitting]   = useState(false);
-  const [inviteLink,   setInviteLink]   = useState<string | null>(null);
 
   const { control, handleSubmit, reset, formState: { errors }, setError } =
     useForm<InviteForm>({
@@ -137,12 +135,8 @@ const UsersClient: React.FC = () => {
     // Refresh the real user list so the newly invited user appears
     await fetchUsers();
 
-    if (result.inviteLink) {
-      setInviteLink(result.inviteLink);
-    } else {
-      setSnackSeverity('success');
-      setSnack(`Invitation email sent to ${data.email}`);
-    }
+    setSnackSeverity('success');
+    setSnack(`Invitation email sent to ${data.email}`);
   };
 
   const handleDelete = async (id: string) => {
@@ -423,32 +417,6 @@ const UsersClient: React.FC = () => {
           <Button onClick={() => setDeleteTarget(null)} color="inherit" sx={{ color: 'text.secondary' }}>Cancel</Button>
           <Button variant="contained" color="error" onClick={() => deleteTarget && handleDelete(deleteTarget)}>Remove</Button>
         </DialogActions>
-      </Dialog>
-
-      {/* Copy invite link dialog — shown in local dev when Supabase email is not configured */}
-      <Dialog open={!!inviteLink} onClose={() => setInviteLink(null)} maxWidth="sm" fullWidth
-        slotProps={{ paper: { sx: { bgcolor: 'background.paper', border: '1px solid rgba(76,175,80,0.2)' } } }}>
-        <DialogTitle>
-          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>Share Invite Link</Typography>
-            <IconButton size="small" onClick={() => setInviteLink(null)}><Close /></IconButton>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Email delivery is not configured. Copy this link and send it directly to the user.
-          </Typography>
-          <Stack direction="row" spacing={1}>
-            <TextField
-              fullWidth size="small" value={inviteLink ?? ''} slotProps={{ input: { readOnly: true } }}
-              sx={{ '& input': { fontSize: '0.78rem', fontFamily: 'monospace' } }}
-            />
-            <Button variant="outlined" startIcon={<ContentCopy />}
-              onClick={() => { navigator.clipboard.writeText(inviteLink ?? ''); setSnack('Link copied!'); setInviteLink(null); }}>
-              Copy
-            </Button>
-          </Stack>
-        </DialogContent>
       </Dialog>
 
       <Snackbar open={!!snack} autoHideDuration={4000} onClose={() => setSnack('')}

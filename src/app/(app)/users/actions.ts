@@ -14,7 +14,6 @@ export interface InviteUserPayload {
 export interface InviteResult {
   success: boolean;
   error?: string;
-  inviteLink?: string;
 }
 
 /**
@@ -68,7 +67,7 @@ export async function inviteUser(payload: InviteUserPayload): Promise<InviteResu
   const admin = createAdminClient();
   const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/accept-invite`;
 
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(payload.email, {
+  const { error } = await admin.auth.admin.inviteUserByEmail(payload.email, {
     redirectTo,
     data: {
       name:     payload.name,
@@ -85,8 +84,7 @@ export async function inviteUser(payload: InviteUserPayload): Promise<InviteResu
     return { success: false, error: error.message };
   }
 
-  const inviteLink = data?.user ? `${redirectTo}?type=invite` : undefined;
-  return { success: true, inviteLink };
+  return { success: true };
 }
 
 /**
