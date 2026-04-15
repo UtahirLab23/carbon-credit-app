@@ -1,5 +1,9 @@
 // @ts-nocheck
 'use client';
+
+// Never statically prerender — depends on browser-side Supabase session
+export const dynamic = 'force-dynamic';
+
 import React, { useState } from 'react';
 import {
   Box,

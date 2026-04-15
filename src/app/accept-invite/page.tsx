@@ -1,5 +1,9 @@
 'use client';
 
+// This page must not be statically prerendered — it reads URL hash tokens
+// that only exist in the browser at runtime.
+export const dynamic = 'force-dynamic';
+
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import {
