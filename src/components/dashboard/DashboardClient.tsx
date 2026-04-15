@@ -27,13 +27,17 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useCreditsData } from '@/hooks/useCreditsData';
 import { StatCardSkeleton, TableSkeleton } from '@/components/Skeletons';
 
-const fmt = (n: number) =>
-  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M`
+// Credits — plain count, no dollar sign
+const fmtCredits = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M`
   : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K`
-  : n.toString();
+  : n.toFixed(0);
 
+// Dollar values — with $ and K/M suffix
 const fmtUSD = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M`
+  : n >= 1_000 ? `$${(n / 1_000).toFixed(1)}K`
+  : `$${n.toFixed(0)}`;
 
 const CARD_META = [
   { label: 'Active Wells',  icon: <WaterDrop />,      solidBg: '#E8762B', textColor: '#FFFFFF' },
@@ -64,9 +68,9 @@ const DashboardClient: React.FC = () => {
 
   const statCards = [
     { ...CARD_META[0], value: stats.activeWells.toString(),   change: 'Live well count' },
-    { ...CARD_META[1], value: fmt(stats.totalCredits),        change: 'Live total credits' },
-    { ...CARD_META[2], value: fmtUSD(stats.totalMarketValue), change: 'Live market value' },
-    { ...CARD_META[3], value: fmtUSD(projected),              change: '+15% of live market value' },
+    { ...CARD_META[1], value: fmtCredits(stats.totalCredits),  change: 'Live total credits' },
+    { ...CARD_META[2], value: fmtUSD(stats.totalMarketValue),  change: 'Live market value' },
+    { ...CARD_META[3], value: fmtUSD(projected),               change: '+15% of live market value' },
   ];
 
   const redCredits    = red.reduce((s, r) => s + r.credits, 0);
@@ -184,8 +188,6 @@ const DashboardClient: React.FC = () => {
                       lineHeight: 1.15,
                       letterSpacing: '-0.02em',
                       whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
                     }}>
                       {card.value}
                     </Typography>
@@ -328,7 +330,7 @@ const DashboardClient: React.FC = () => {
                       {/* Right: value + badge — both right-aligned on the same vertical axis */}
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
                         <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.4, whiteSpace: 'nowrap' }}>
-                          {record.credits.toLocaleString()} credits
+                          {fmtCredits(record.credits)} credits
                         </Typography>
                         <Chip
                           label={statusLabels[record.status]}

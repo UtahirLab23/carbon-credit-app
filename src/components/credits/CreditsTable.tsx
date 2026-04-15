@@ -62,8 +62,15 @@ type Density  = 'compact' | 'comfortable';
 
 const PAGE_SIZES = [5, 10, 25];
 
+const fmtCredits = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M`
+  : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K`
+  : n.toFixed(0);
+
 const fmtUSD = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M`
+  : n >= 1_000 ? `$${(n / 1_000).toFixed(1)}K`
+  : `$${n.toFixed(0)}`;
 
 const CreditsTable: React.FC<CreditsTableProps> = ({
   records,
@@ -187,7 +194,7 @@ const CreditsTable: React.FC<CreditsTableProps> = ({
       <Grid container spacing={3} sx={{ mb: 3 }}>
         {[
           { label: 'Total Fields',  value: records.length.toString(),       sub: 'active records',  icon: '📋' },
-          { label: 'Total Credits', value: totals.credits.toLocaleString(), sub: 'carbon credits',  icon: '⚡' },
+          { label: 'Total Credits', value: fmtCredits(totals.credits), sub: 'carbon credits',  icon: '⚡' },
           { label: 'Avg. Progress', value: `${totals.avgProg}%`,            sub: 'completion rate', icon: '📈' },
           { label: 'Market Value',  value: fmtUSD(totals.mktVal),          sub: 'projected USD',   icon: '💰' },
         ].map((s) => (
@@ -365,7 +372,7 @@ const CreditsTable: React.FC<CreditsTableProps> = ({
                         </TableCell>
                         <TableCell align="right" sx={{ py: cellPy }}>
                           <Stack sx={{ alignItems: 'flex-end' }}>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{record.credits.toLocaleString()}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{fmtCredits(record.credits)}</Typography>
                             <Stack direction="row" spacing={0.3} sx={{ alignItems: 'center' }}>
                               <TrendingUp sx={{ fontSize: 11, color: 'success.main' }} />
                               <Typography variant="caption" color="success.main">credits</Typography>
